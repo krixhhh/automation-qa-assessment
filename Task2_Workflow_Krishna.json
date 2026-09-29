@@ -1,0 +1,261 @@
+{
+  "name": "Task 2 - GitHub API Morning Digest Workflow",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "hours",
+              "hoursInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "1a2b3c4d-0001-4000-8000-000000000001",
+      "name": "Schedule Trigger",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.github.com/search/repositories",
+        "sendQuery": true,
+        "queryParameters": {
+          "parameters": [
+            {
+              "name": "q",
+              "value": "topic:qa-automation"
+            },
+            {
+              "name": "sort",
+              "value": "stars"
+            },
+            {
+              "name": "order",
+              "value": "desc"
+            },
+            {
+              "name": "per_page",
+              "value": "10"
+            }
+          ]
+        },
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "n8n-qa-automation-agent"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "options": {
+          "batching": {
+            "batch": {}
+          }
+        }
+      },
+      "id": "1a2b3c4d-0002-4000-8000-000000000002",
+      "name": "Fetch Top Repos (HTTP #1)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Extract repository items from GitHub API response\nconst items = $input.all();\nif (!items || items.length === 0 || !items[0].json || !items[0].json.items) {\n  return [{ json: { error: true, message: 'No repository items found in response' } }];\n}\n\nconst rawRepos = items[0].json.items;\n\n// Filter, sort by stargazers count, and keep top 5\nconst top5Repos = rawRepos\n  .filter(repo => repo.description && !repo.fork)\n  .sort((a, b) => b.stargazers_count - a.stargazers_count)\n  .slice(0, 5)\n  .map(repo => ({\n    id: repo.id,\n    name: repo.name,\n    full_name: repo.full_name,\n    owner: repo.owner.login,\n    html_url: repo.html_url,\n    stargazers_count: repo.stargazers_count,\n    forks_count: repo.forks_count,\n    language: repo.language || 'N/A',\n    description: repo.description,\n    updated_at: repo.updated_at\n  }));\n\nreturn top5Repos.map(repo => ({ json: repo }));"
+      },
+      "id": "1a2b3c4d-0003-4000-8000-000000000003",
+      "name": "Transform & Keep Top 5",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        710,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "=https://api.github.com/repos/{{ $json.owner }}/{{ $json.name }}/readme",
+        "sendHeaders": true,
+        "headerParameters": {
+          "parameters": [
+            {
+              "name": "User-Agent",
+              "value": "n8n-qa-automation-agent"
+            },
+            {
+              "name": "Accept",
+              "value": "application/vnd.github.v3+json"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "1a2b3c4d-0004-4000-8000-000000000004",
+      "name": "Enrich README Data (HTTP #2)",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        940,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "number": [
+            {
+              "value1": "={{ $json.stargazers_count || $('Transform & Keep Top 5').item.json.stargazers_count }}",
+              "operation": "largerEqual",
+              "value2": 1000
+            }
+          ]
+        }
+      },
+      "id": "1a2b3c4d-0005-4000-8000-000000000005",
+      "name": "IF Stars >= 1000",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        1170,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.discordWebhookUrl || 'https://discord.com/api/webhooks/CONFIGURE_YOUR_WEBHOOK' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"🚀 **Top QA Automation Repository Digest**\",\n  \"embeds\": [\n    {\n      \"title\": \"{{ $('Transform & Keep Top 5').item.json.full_name }}\",\n      \"url\": \"{{ $('Transform & Keep Top 5').item.json.html_url }}\",\n      \"description\": \"{{ $('Transform & Keep Top 5').item.json.description }}\",\n      \"color\": 3066993,\n      \"fields\": [\n        { \"name\": \"⭐ Stars\", \"value\": \"{{ $('Transform & Keep Top 5').item.json.stargazers_count }}\", \"inline\": true },\n        { \"name\": \"🍴 Forks\", \"value\": \"{{ $('Transform & Keep Top 5').item.json.forks_count }}\", \"inline\": true },\n        { \"name\": \"💻 Language\", \"value\": \"{{ $('Transform & Keep Top 5').item.json.language }}\", \"inline\": true }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "discord_webhook_cred",
+          "name": "Discord Webhook Credential"
+        }
+      },
+      "id": "1a2b3c4d-0006-4000-8000-000000000006",
+      "name": "Send Discord Digest Notification",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1400,
+        200
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log fallback error message for failed API requests\nconst item = $input.first();\nconst errorMessage = item.json.error ? item.json.error.message : 'HTTP Request failed during repository enrichment';\nconsole.error('[WORKFLOW ALERT] Execution encountered error:', errorMessage);\n\nreturn [{\n  json: {\n    alert: true,\n    timestamp: new Date().toISOString(),\n    status: 'Failed',\n    message: errorMessage\n  }\n}];"
+      },
+      "id": "1a2b3c4d-0007-4000-8000-000000000007",
+      "name": "Error Fallback Logger",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        940,
+        520
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Trigger": {
+      "main": [
+        [
+          {
+            "node": "Fetch Top Repos (HTTP #1)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Fetch Top Repos (HTTP #1)": {
+      "main": [
+        [
+          {
+            "node": "Transform & Keep Top 5",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Fallback Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Transform & Keep Top 5": {
+      "main": [
+        [
+          {
+            "node": "Enrich README Data (HTTP #2)",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Enrich README Data (HTTP #2)": {
+      "main": [
+        [
+          {
+            "node": "IF Stars >= 1000",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Error Fallback Logger",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Stars >= 1000": {
+      "main": [
+        [
+          {
+            "node": "Send Discord Digest Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "77777777-8888-9999-aaaa-bbbbbbbbbbbb",
+  "id": "github-digest-workflow-krishna",
+  "meta": {
+    "instanceId": "n8n-qa-assessment-krishna"
+  },
+  "tags": []
+}

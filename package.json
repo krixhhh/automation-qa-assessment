@@ -1,0 +1,10 @@
+{
+  "name": "automation-qa-assessment",
+  "version": "1.0.0",
+  "description": "Automation & QA Developer Take-Home Assessment",
+  "main": "index.js",
+  "scripts": {},
+  "dependencies": {
+    "pdfkit": "^0.15.0"
+  }
+}

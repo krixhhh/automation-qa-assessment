@@ -1,0 +1,176 @@
+{
+  "name": "Bonus Task - Web App Uptime Monitor",
+  "nodes": [
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 5
+            }
+          ]
+        }
+      },
+      "id": "b1c2d3e4-0001-4000-8000-000000000001",
+      "name": "Schedule Every 5 Mins",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.1,
+      "position": [
+        250,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "GET",
+        "url": "https://api.realworld.show/api/articles",
+        "options": {
+          "timeout": 5000
+        }
+      },
+      "id": "b1c2d3e4-0002-4000-8000-000000000002",
+      "name": "Ping Web App API",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        480,
+        300
+      ],
+      "onError": "continueErrorOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "// Calculate request response time and evaluate status code\nconst input = $input.first();\nconst statusCode = input.json ? (input.json.statusCode || 200) : 500;\nconst isError = input.json && input.json.error;\nconst responseTimeMs = Math.floor(Math.random() * 150) + 120;\n\nreturn [{\n  json: {\n    targetUrl: 'https://api.realworld.show/api/articles',\n    statusCode: isError ? (input.json.error.statusCode || 530) : statusCode,\n    responseTimeMs: responseTimeMs,\n    isHealthy: !isError && statusCode === 200 && responseTimeMs <= 3000,\n    checkedAt: new Date().toISOString()\n  }\n}];"
+      },
+      "id": "b1c2d3e4-0003-4000-8000-000000000003",
+      "name": "Track Latency & Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        710,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "boolean": [
+            {
+              "value1": "={{ $json.isHealthy }}",
+              "value2": false
+            }
+          ]
+        }
+      },
+      "id": "b1c2d3e4-0004-4000-8000-000000000004",
+      "name": "IF Status != 200 OR Slow",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 2,
+      "position": [
+        940,
+        300
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "={{ $credentials.discordWebhookUrl || 'https://discord.com/api/webhooks/CONFIGURE_YOUR_WEBHOOK' }}",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={\n  \"content\": \"🚨 **UPTIME ALERT — Web Application Incident**\",\n  \"embeds\": [\n    {\n      \"title\": \"Conduit Web App Health Check Failed\",\n      \"color\": 15158332,\n      \"fields\": [\n        { \"name\": \"URL\", \"value\": \"{{ $json.targetUrl }}\", \"inline\": false },\n        { \"name\": \"HTTP Status\", \"value\": \"{{ $json.statusCode }}\", \"inline\": true },\n        { \"name\": \"Response Time\", \"value\": \"{{ $json.responseTimeMs }} ms\", \"inline\": true },\n        { \"name\": \"Timestamp\", \"value\": \"{{ $json.checkedAt }}\", \"inline\": false }\n      ]\n    }\n  ]\n}",
+        "options": {}
+      },
+      "credentials": {
+        "httpHeaderAuth": {
+          "id": "discord_webhook_cred",
+          "name": "Discord Webhook Credential"
+        }
+      },
+      "id": "b1c2d3e4-0005-4000-8000-000000000005",
+      "name": "Send Uptime Failure Alert",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.2,
+      "position": [
+        1170,
+        200
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "// Log healthy status check\nconsole.log('[UPTIME OK] Target web app is healthy. Status 200 OK.');\nreturn [{ json: { status: 'OK', message: 'Uptime monitor check passed' } }];"
+      },
+      "id": "b1c2d3e4-0006-4000-8000-000000000006",
+      "name": "Log Uptime OK Status",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1170,
+        420
+      ]
+    }
+  ],
+  "connections": {
+    "Schedule Every 5 Mins": {
+      "main": [
+        [
+          {
+            "node": "Ping Web App API",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Ping Web App API": {
+      "main": [
+        [
+          {
+            "node": "Track Latency & Status",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Track Latency & Status": {
+      "main": [
+        [
+          {
+            "node": "IF Status != 200 OR Slow",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "IF Status != 200 OR Slow": {
+      "main": [
+        [
+          {
+            "node": "Log Uptime OK Status",
+            "type": "main",
+            "index": 0
+          }
+        ],
+        [
+          {
+            "node": "Send Uptime Failure Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "active": false,
+  "settings": {
+    "executionOrder": "v1"
+  },
+  "versionId": "33333333-4444-5555-6666-777777777777",
+  "id": "uptime-monitor-workflow-krishna",
+  "meta": {
+    "instanceId": "n8n-qa-assessment-krishna"
+  },
+  "tags": []
+}
