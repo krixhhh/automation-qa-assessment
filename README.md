@@ -1,4 +1,4 @@
-# Automation & QA Developer — Take-Home Assessment
+# Automation & QA Developer
 
 **Candidate:** Krishna Kumar  
 **Role:** Automation & QA Developer  
