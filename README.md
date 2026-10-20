@@ -11,7 +11,7 @@ This repository contains the completed take-home assessment for the Automation &
 - **Uptime monitoring (Bonus):** A secondary n8n workflow tracking web application HTTP status and response time metrics with automated incident alerting.
 
 ---
-
+ 
 ## Assessment Deliverables
 
 | Deliverable | File | Description |
